@@ -26,7 +26,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-//import dalvik.system.VMRuntime;
+import dalvik.system.VMRuntime;
 import de.tavendo.autobahn.WebSocket;
 import de.tavendo.autobahn.WebSocketConnection;
 import de.tavendo.autobahn.WebSocketException;
@@ -63,7 +63,10 @@ public class MainActivity extends Activity {
 
    private WebSocket sess = new WebSocketConnection();
    
+   // FIXME: the recursive design of this seems to make the GC unhappy. Java sucks.
    private void next() {
+      
+      System.gc();
 
       WebSocketOptions options = new WebSocketOptions();
       options.setVerifyCertificateAuthority(false);
@@ -100,8 +103,8 @@ public class MainActivity extends Activity {
                testOptions.setReceiveTextMessagesRaw(true);
                //testOptions.setValidateIncomingUtf8(false);
                //testOptions.setMaskClientFrames(false);
-               //testOptions.setMaxMessagePayloadSize(4*1024*1024);
-               //testOptions.setMaxFramePayloadSize(4*1024*1024);
+               testOptions.setMaxMessagePayloadSize(2*1024*1024);
+               testOptions.setMaxFramePayloadSize(2*1024*1024);
                //testOptions.setTcpNoDelay(false);
 
                sess.connect(mWsUri.getText() + "/runCase?case=" + currCase + "&agent=" + mAgent.getText(),
@@ -155,8 +158,9 @@ public class MainActivity extends Activity {
    @Override
    public void onCreate(Bundle savedInstanceState) {
 	   
-	  //VMRuntime heap = VMRuntime.getRuntime();
-	  //heap.setMinimumHeapSize(128 * 1024 * 1024);
+     // FIXME: seems to have no effect at all.
+	  VMRuntime heap = VMRuntime.getRuntime();
+	  heap.setMinimumHeapSize(128 * 1024 * 1024);
 
       super.onCreate(savedInstanceState);
 
