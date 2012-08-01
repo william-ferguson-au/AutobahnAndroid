@@ -38,6 +38,7 @@ public class WebSocketOptions {
    private boolean mValidateIncomingUtf8;
    private boolean mMaskClientFrames;
    private boolean mVerifyCertificateAuthority;
+   private int mReconnectInterval;
 
 
    /**
@@ -53,6 +54,7 @@ public class WebSocketOptions {
       mSocketConnectTimeout = 6000;
       mValidateIncomingUtf8 = true;
       mMaskClientFrames = true;
+      mReconnectInterval = 0;  // no reconnection by default
       
       // trusting everything run from a emulator      
       if (Build.PRODUCT.contains("sdk")) {
@@ -77,6 +79,7 @@ public class WebSocketOptions {
       mSocketConnectTimeout = other.mSocketConnectTimeout;
       mValidateIncomingUtf8 = other.mValidateIncomingUtf8;
       mMaskClientFrames = other.mMaskClientFrames;
+      mReconnectInterval = other.mReconnectInterval;
       mVerifyCertificateAuthority = other.mVerifyCertificateAuthority;
    }
 
@@ -267,6 +270,24 @@ public class WebSocketOptions {
    }
    
    /**
+    * Set interval for automatic reconnect.
+    * 
+    * @param reconnectInterval   Interval in ms, 0 - no automatic reconnect.
+    */
+   public void setReconnectInterval(int reconnectInterval) {
+      mReconnectInterval = reconnectInterval;
+   }
+   
+   /**
+    * Get interval for automatic reconnect.
+    *
+    * @return        Interval in ms, 0 - no automatic reconnect.
+    */
+   public int getReconnectInterval() {
+      return mReconnectInterval;
+   }
+
+   /**
     * Get Verify CA option
     * @return        True, iff CA has to be verified.
     */
@@ -282,5 +303,5 @@ public class WebSocketOptions {
     */
    public void setVerifyCertificateAuthority(boolean verify) {
       mVerifyCertificateAuthority = verify;
-   }
+   }  
 }

@@ -100,8 +100,8 @@ public class MainActivity extends Activity {
                testOptions.setReceiveTextMessagesRaw(true);
                //testOptions.setValidateIncomingUtf8(false);
                //testOptions.setMaskClientFrames(false);
-               testOptions.setMaxMessagePayloadSize(4*1024*1024);
-               testOptions.setMaxFramePayloadSize(4*1024*1024);
+               //testOptions.setMaxMessagePayloadSize(4*1024*1024);
+               //testOptions.setMaxFramePayloadSize(4*1024*1024);
                //testOptions.setTcpNoDelay(false);
 
                sess.connect(mWsUri.getText() + "/runCase?case=" + currCase + "&agent=" + mAgent.getText(),

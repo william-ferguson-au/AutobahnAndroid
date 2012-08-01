@@ -20,8 +20,8 @@ package de.tavendo.autobahn;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.Random;
-
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -393,6 +393,12 @@ public class WebSocketWriter extends Handler {
             mSocket.getOutputStream().write(arr);
          }
 
+      } catch (SocketException e) {
+    	  
+    	  if (DEBUG) Log.d(TAG, "run() : SocketException (" + e.toString() + ")");
+    	  
+    	  // wrap the exception and notify master
+    	  notify(new WebSocketMessage.ConnectionLost());
       } catch (Exception e) {
 
          if (DEBUG) e.printStackTrace();
