@@ -18,6 +18,7 @@
 
 package de.tavendo.autobahn;
 
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.SocketException;
@@ -687,10 +688,12 @@ public class WebSocketReader extends Thread {
       try {
          
          mBufferLen = 0;
+         
+         InputStream mIn = mSocket.getInputStream();
 
          do {
             // blocking read on socket
-            int len = mSocket.getInputStream().read(mBuffer, mBufferLen, mBuffer.length - mBufferLen);
+            int len = mIn.read(mBuffer, mBufferLen, mBuffer.length - mBufferLen);
             
             if (len > 0) {
                mBufferLen += len;

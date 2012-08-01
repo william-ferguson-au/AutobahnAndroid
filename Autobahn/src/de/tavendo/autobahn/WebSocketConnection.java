@@ -20,6 +20,7 @@ package de.tavendo.autobahn;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -55,7 +56,7 @@ public class WebSocketConnection implements WebSocket {
    protected HandlerThread mWriterThread;
 
    protected Socket mTransportChannel;
-   protected BufferedOutputStream mOut;
+   protected OutputStream mOut;
 
    private URI mWsUri;
    private String mWsScheme;
@@ -115,7 +116,7 @@ public class WebSocketConnection implements WebSocket {
 
             SSLSocketFactory fctry = getSSLSocketFactory();
 
-            SSLSocket secSoc = (SSLSocket)fctry.createSocket(mWsHost, mWsPort);
+            SSLSocket secSoc = (SSLSocket) fctry.createSocket(mWsHost, mWsPort);
             secSoc.setUseClientMode(true);
             secSoc.addHandshakeCompletedListener(new HandshakeCompletedListener() {
                public void handshakeCompleted(HandshakeCompletedEvent event) {
@@ -131,6 +132,13 @@ public class WebSocketConnection implements WebSocket {
             //
             soc = new Socket(mWsHost, mWsPort);
          }
+
+         // before doing any data transfer on the socket, set socket options
+         soc.setSoTimeout(mOptions.getSocketReceiveTimeout());
+         soc.setTcpNoDelay(mOptions.getTcpNoDelay());
+         //soc.setReceiveBufferSize(16 * 1024);
+         //soc.setSendBufferSize(16 * 1024);
+         
          return soc;
       }
 
@@ -141,8 +149,8 @@ public class WebSocketConnection implements WebSocket {
 
          try {
             mTransportChannel = createSocket();
-            //mOut = mTransportChannel.getOutputStream();
-            mOut = new BufferedOutputStream(mTransportChannel.getOutputStream(), 1024*1024*1 + 14);        
+            mOut = mTransportChannel.getOutputStream();
+            //mOut = new BufferedOutputStream(mTransportChannel.getOutputStream(), 8*1024);        
 
             return null;
 

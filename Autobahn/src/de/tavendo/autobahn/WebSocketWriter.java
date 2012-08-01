@@ -56,6 +56,8 @@ public class WebSocketWriter extends Handler {
 
    /// WebSocket options.
    private final WebSocketOptions mOptions;
+   
+   private final NoCopyByteArrayOutputStream mFrameHeaderBuffer;
 
 
    /**
@@ -75,6 +77,8 @@ public class WebSocketWriter extends Handler {
       mMaster = master;
       mOut = out;
       mOptions = options;
+      
+      mFrameHeaderBuffer = new NoCopyByteArrayOutputStream(mOptions.getMaxMessagePayloadSize() + 14);
 
       if (DEBUG) Log.d(TAG, "created");
    }
@@ -139,6 +143,8 @@ public class WebSocketWriter extends Handler {
     * Send WebSocket client handshake.
     */
    private void sendClientHandshake(WebSocketMessage.ClientHandshake message) throws IOException {
+      
+      mFrameHeaderBuffer.reset();
 
       // write HTTP header with handshake
       String path;
@@ -147,49 +153,51 @@ public class WebSocketWriter extends Handler {
       } else {
          path = message.mPath;
       }
-      mOut.write(("GET " + path + " HTTP/1.1").getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("GET " + path + " HTTP/1.1").getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
-      mOut.write(("Host: " + message.mHost).getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("Host: " + message.mHost).getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
-      mOut.write(("Upgrade: WebSocket").getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("Upgrade: WebSocket").getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
-      mOut.write(("Connection: Upgrade").getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("Connection: Upgrade").getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
-      mOut.write(("Sec-WebSocket-Key: " + newHandshakeKey()).getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("Sec-WebSocket-Key: " + newHandshakeKey()).getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
       if (message.mOrigin != null && !message.mOrigin.equals("")) {
-         mOut.write(("Origin: " + message.mOrigin).getBytes("UTF-8"));
-         mOut.write(0x0D);
-         mOut.write(0x0A);
+         mFrameHeaderBuffer.write(("Origin: " + message.mOrigin).getBytes("UTF-8"));
+         mFrameHeaderBuffer.write(0x0D);
+         mFrameHeaderBuffer.write(0x0A);
       }
 
       if (message.mSubprotocols != null && message.mSubprotocols.length > 0) {
-         mOut.write(("Sec-WebSocket-Protocol: ").getBytes("UTF-8"));
+         mFrameHeaderBuffer.write(("Sec-WebSocket-Protocol: ").getBytes("UTF-8"));
          for (int i = 0; i < message.mSubprotocols.length; ++i) {
-            mOut.write((message.mSubprotocols[i]).getBytes("UTF-8"));
-            mOut.write((", ").getBytes("UTF-8"));
+            mFrameHeaderBuffer.write((message.mSubprotocols[i]).getBytes("UTF-8"));
+            mFrameHeaderBuffer.write((", ").getBytes("UTF-8"));
          }
-         mOut.write(0x0D);
-         mOut.write(0x0A);
+         mFrameHeaderBuffer.write(0x0D);
+         mFrameHeaderBuffer.write(0x0A);
       }
 
-      mOut.write(("Sec-WebSocket-Version: 13").getBytes("UTF-8"));
-      mOut.write(0x0D);
-      mOut.write(0x0A);
+      mFrameHeaderBuffer.write(("Sec-WebSocket-Version: 13").getBytes("UTF-8"));
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
 
-      mOut.write(0x0D);
-      mOut.write(0x0A);
-      mOut.flush();
+      mFrameHeaderBuffer.write(0x0D);
+      mFrameHeaderBuffer.write(0x0A);
+      
+      mOut.write(mFrameHeaderBuffer.getByteArray(), 0, mFrameHeaderBuffer.size());
+      //mOut.flush();
       
       if (DEBUG) Log.d(TAG, "WS opening handshake sent");
    }
@@ -315,6 +323,8 @@ public class WebSocketWriter extends Handler {
     * @param length     Length of the chunk within payload to send.
     */
    protected void sendFrame(int opcode, boolean fin, byte[] payload, int offset, int length) throws IOException {
+      
+      mFrameHeaderBuffer.reset();
 
       // first octet
       byte b0 = 0;
@@ -322,7 +332,7 @@ public class WebSocketWriter extends Handler {
          b0 |= (byte) (1 << 7);
       }
       b0 |= (byte) opcode;
-      mOut.write(b0);
+      mFrameHeaderBuffer.write(b0);
 
       // second octet
       byte b1 = 0;
@@ -335,16 +345,16 @@ public class WebSocketWriter extends Handler {
       // extended payload length
       if (len <= 125) {
          b1 |= (byte) len;
-         mOut.write(b1);
+         mFrameHeaderBuffer.write(b1);
       } else if (len <= 0xffff) {
          b1 |= (byte) (126 & 0xff);
-         mOut.write(b1);
-         mOut.write(new byte[] {(byte)((len >> 8) & 0xff),
-                                (byte)( len       & 0xff)});
+         mFrameHeaderBuffer.write(b1);
+         mFrameHeaderBuffer.write(new byte[] {(byte)((len >> 8) & 0xff),
+                                              (byte)( len       & 0xff)});
       } else {
          b1 |= (byte) (127 & 0xff);
-         mOut.write(b1);
-         mOut.write(new byte[] {(byte)((len >> 56) & 0xff),
+         mFrameHeaderBuffer.write(b1);
+         mFrameHeaderBuffer.write(new byte[] {(byte)((len >> 56) & 0xff),
                                 (byte)((len >> 48) & 0xff),
                                 (byte)((len >> 40) & 0xff),
                                 (byte)((len >> 32) & 0xff),
@@ -358,12 +368,12 @@ public class WebSocketWriter extends Handler {
       if (mOptions.getMaskClientFrames()) {
          // a mask is always needed, even without payload
          mask = newFrameMask();
-         mOut.write(mask[0]);
-         mOut.write(mask[1]);
-         mOut.write(mask[2]);
-         mOut.write(mask[3]);
+         mFrameHeaderBuffer.write(mask[0]);
+         mFrameHeaderBuffer.write(mask[1]);
+         mFrameHeaderBuffer.write(mask[2]);
+         mFrameHeaderBuffer.write(mask[3]);
       }
-
+      
       if (len > 0) {
          if (mOptions.getMaskClientFrames()) {
             /// \todo optimize masking
@@ -371,10 +381,13 @@ public class WebSocketWriter extends Handler {
                payload[i + offset] ^= mask[i % 4];
             }
          }
-         mOut.write(payload, offset, length);
+         //mOut.write(payload, offset, length);
+         mFrameHeaderBuffer.write(payload, offset, length);
       }
       
-      mOut.flush();
+      mOut.write(mFrameHeaderBuffer.getByteArray(), 0, mFrameHeaderBuffer.size());
+
+      //mOut.flush();
    }
 
 
