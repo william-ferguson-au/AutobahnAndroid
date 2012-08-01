@@ -18,6 +18,7 @@
 
 package de.tavendo.autobahn;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.net.URI;
@@ -54,6 +55,7 @@ public class WebSocketConnection implements WebSocket {
    protected HandlerThread mWriterThread;
 
    protected Socket mTransportChannel;
+   protected BufferedOutputStream mOut;
 
    private URI mWsUri;
    private String mWsScheme;
@@ -139,6 +141,8 @@ public class WebSocketConnection implements WebSocket {
 
          try {
             mTransportChannel = createSocket();
+            //mOut = mTransportChannel.getOutputStream();
+            mOut = new BufferedOutputStream(mTransportChannel.getOutputStream(), 1024*128);        
 
             return null;
 
@@ -561,12 +565,13 @@ public class WebSocketConnection implements WebSocket {
 
    /**
     * Create WebSockets background writer.
+    * @throws IOException 
     */
-   protected void createWriter() {
+   protected void createWriter() throws IOException {
 
       mWriterThread = new HandlerThread("WebSocketWriter");
       mWriterThread.start();
-      mWriter = new WebSocketWriter(mWriterThread.getLooper(), mMasterHandler, mTransportChannel, mOptions);
+      mWriter = new WebSocketWriter(mWriterThread.getLooper(), mMasterHandler, mOut, mOptions);
 
       if (DEBUG) Log.d(TAG, "WS writer created and started");
    }

@@ -19,7 +19,7 @@
 package de.tavendo.autobahn;
 
 import java.io.IOException;
-import java.net.Socket;
+import java.io.OutputStream;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.JsonGenerator;
@@ -59,10 +59,10 @@ public class WampWriter extends WebSocketWriter {
     * @param socket     The TCP socket (channel) the WebSocket connection runs over.
     * @param options    WebSockets options for the underlying WebSockets connection.
     */
-   public WampWriter(Looper looper, Handler master, Socket socket,
+   public WampWriter(Looper looper, Handler master, OutputStream out,
          WebSocketOptions options) {
 
-      super(looper, master, socket, options);
+      super(looper, master, out, options);
 
       mJsonFactory = new MappingJsonFactory();
       mPayload = new NoCopyByteArrayOutputStream();

@@ -19,7 +19,7 @@
 package de.tavendo.autobahn;
 
 import java.io.IOException;
-import java.net.Socket;
+import java.io.OutputStream;
 import java.net.SocketException;
 import java.util.Random;
 import android.os.Handler;
@@ -29,10 +29,11 @@ import android.util.Base64;
 import android.util.Log;
 
 /**
- * WebSocket writer, the sending leg of a WebSockets connection.
+ * WebSocket writer, the sending leg of a WebSocket connection.
+ * 
  * This is run on it's background thread with it's own message loop.
  * The only method that needs to be called (from foreground thread) is forward(),
- * which is used to forward a WebSockets message to this object (running on
+ * which is used to forward a WebSocket message to this object (running on
  * background thread) so that it can be formatted and sent out on the
  * underlying TCP socket.
  */
@@ -50,34 +51,30 @@ public class WebSocketWriter extends Handler {
    /// Message looper this object is running on.
    private final Looper mLooper;
 
-   /// The NIO socket channel created on foreground thread.
-   private final Socket mSocket;
+   /// Output stream this WebSocket writer is writing data to (should be a buffered stream!)
+   private final OutputStream mOut;
 
-   /// WebSockets options.
+   /// WebSocket options.
    private final WebSocketOptions mOptions;
-
-   /// The send buffer that holds data to send on socket.
-   private final ByteBufferOutputStream mBuffer;
 
 
    /**
-    * Create new WebSockets background writer.
+    * Create new WebSocket background writer.
     *
     * @param looper    The message looper of the background thread on which
     *                  this object is running.
     * @param master    The message handler of master (foreground thread).
-    * @param mTransportChannel    The socket channel created on foreground thread.
-    * @param options   WebSockets connection options.
+    * @param out       The output stream to write to. Note that this should be a buffered stream!
+    * @param options   WebSocket connection options.
     */
-   public WebSocketWriter(Looper looper, Handler master, Socket mTransportChannel, WebSocketOptions options) {
+   public WebSocketWriter(Looper looper, Handler master, OutputStream out, WebSocketOptions options) {
 
       super(looper);
 
       mLooper = looper;
       mMaster = master;
-      mSocket = mTransportChannel;
+      mOut = out;
       mOptions = options;
-      mBuffer = new ByteBufferOutputStream(options.getMaxFramePayloadSize() + 14, 4*64*1024);
 
       if (DEBUG) Log.d(TAG, "created");
    }
@@ -88,7 +85,7 @@ public class WebSocketWriter extends Handler {
     * (running on background thread) send a WebSocket message on the
     * underlying TCP.
     *
-    * @param message       Message to send to WebSockets writer. An instance of the message
+    * @param message       Message to send to WebSocket writer. An instance of the message
     *                      classes inside WebSocketMessage or another type which then needs
     *                      to be handled within processAppMessage() (in a class derived from
     *                      this class).
@@ -115,9 +112,9 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Create new key for WebSockets handshake.
+    * Create new key for WebSocket handshake.
     *
-    * @return WebSockets handshake key (Base64 encoded).
+    * @return WebSocket handshake key (Base64 encoded).
     */
    private String newHandshakeKey() {
       final byte[] ba = new byte[16];
@@ -150,41 +147,56 @@ public class WebSocketWriter extends Handler {
       } else {
          path = message.mPath;
       }
-      mBuffer.write("GET " + path + " HTTP/1.1");
-      mBuffer.crlf();
-      mBuffer.write("Host: " + message.mHost);
-      mBuffer.crlf();
-      mBuffer.write("Upgrade: WebSocket");
-      mBuffer.crlf();
-      mBuffer.write("Connection: Upgrade");
-      mBuffer.crlf();
+      mOut.write(("GET " + path + " HTTP/1.1").getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
 
-      mBuffer.write("Sec-WebSocket-Key: " + newHandshakeKey());
-      mBuffer.crlf();
+      mOut.write(("Host: " + message.mHost).getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
+
+      mOut.write(("Upgrade: WebSocket").getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
+
+      mOut.write(("Connection: Upgrade").getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
+
+      mOut.write(("Sec-WebSocket-Key: " + newHandshakeKey()).getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
 
       if (message.mOrigin != null && !message.mOrigin.equals("")) {
-         mBuffer.write("Origin: " + message.mOrigin);
-         mBuffer.crlf();
+         mOut.write(("Origin: " + message.mOrigin).getBytes("UTF-8"));
+         mOut.write(0x0D);
+         mOut.write(0x0A);
       }
 
       if (message.mSubprotocols != null && message.mSubprotocols.length > 0) {
-         mBuffer.write("Sec-WebSocket-Protocol: ");
+         mOut.write(("Sec-WebSocket-Protocol: ").getBytes("UTF-8"));
          for (int i = 0; i < message.mSubprotocols.length; ++i) {
-            mBuffer.write(message.mSubprotocols[i]);
-            mBuffer.write(", ");
+            mOut.write((message.mSubprotocols[i]).getBytes("UTF-8"));
+            mOut.write((", ").getBytes("UTF-8"));
          }
-         mBuffer.crlf();
+         mOut.write(0x0D);
+         mOut.write(0x0A);
       }
 
-      mBuffer.write("Sec-WebSocket-Version: 13");
-      mBuffer.crlf();
+      mOut.write(("Sec-WebSocket-Version: 13").getBytes("UTF-8"));
+      mOut.write(0x0D);
+      mOut.write(0x0A);
 
-      mBuffer.crlf();
+      mOut.write(0x0D);
+      mOut.write(0x0A);
+      mOut.flush();
+      
+      if (DEBUG) Log.d(TAG, "WS opening handshake sent");
    }
 
 
    /**
-    * Send WebSockets close.
+    * Send WebSocket close.
     */
    private void sendClose(WebSocketMessage.Close message) throws IOException, WebSocketException {
 
@@ -219,7 +231,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Send WebSockets ping.
+    * Send WebSocket ping.
     */
    private void sendPing(WebSocketMessage.Ping message) throws IOException, WebSocketException {
       if (message.mPayload != null && message.mPayload.length > 125) {
@@ -230,7 +242,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Send WebSockets pong. Normally, unsolicited Pongs are not used,
+    * Send WebSocket pong. Normally, unsolicited Pongs are not used,
     * but Pongs are only send in response to a Ping from the peer.
     */
    private void sendPong(WebSocketMessage.Pong message) throws IOException, WebSocketException {
@@ -242,7 +254,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Send WebSockets binary message.
+    * Send WebSocket binary message.
     */
    private void sendBinaryMessage(WebSocketMessage.BinaryMessage message) throws IOException, WebSocketException {
       if (message.mPayload.length > mOptions.getMaxMessagePayloadSize()) {
@@ -253,7 +265,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Send WebSockets text message.
+    * Send WebSocket text message.
     */
    private void sendTextMessage(WebSocketMessage.TextMessage message) throws IOException, WebSocketException {
       byte[] payload = message.mPayload.getBytes("UTF-8");
@@ -265,7 +277,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Send WebSockets binary message.
+    * Send WebSocket binary message.
     */
    private void sendRawTextMessage(WebSocketMessage.RawTextMessage message) throws IOException, WebSocketException {
       if (message.mPayload.length > mOptions.getMaxMessagePayloadSize()) {
@@ -276,7 +288,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Sends a WebSockets frame. Only need to use this method in derived classes which implement
+    * Sends a WebSocket frame. Only need to use this method in derived classes which implement
     * more message types in processAppMessage(). You need to know what you are doing!
     *
     * @param opcode     The WebSocket frame opcode.
@@ -293,7 +305,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Sends a WebSockets frame. Only need to use this method in derived classes which implement
+    * Sends a WebSocket frame. Only need to use this method in derived classes which implement
     * more message types in processAppMessage(). You need to know what you are doing!
     *
     * @param opcode     The WebSocket frame opcode.
@@ -310,7 +322,7 @@ public class WebSocketWriter extends Handler {
          b0 |= (byte) (1 << 7);
       }
       b0 |= (byte) opcode;
-      mBuffer.write(b0);
+      mOut.write(b0);
 
       // second octet
       byte b1 = 0;
@@ -323,45 +335,46 @@ public class WebSocketWriter extends Handler {
       // extended payload length
       if (len <= 125) {
          b1 |= (byte) len;
-         mBuffer.write(b1);
+         mOut.write(b1);
       } else if (len <= 0xffff) {
          b1 |= (byte) (126 & 0xff);
-         mBuffer.write(b1);
-         mBuffer.write(new byte[] {(byte)((len >> 8) & 0xff),
-               (byte)(len & 0xff)});
+         mOut.write(b1);
+         mOut.write(new byte[] {(byte)((len >> 8) & 0xff),
+                                (byte)( len       & 0xff)});
       } else {
          b1 |= (byte) (127 & 0xff);
-         mBuffer.write(b1);
-         mBuffer.write(new byte[] {(byte)((len >> 56) & 0xff),
-               (byte)((len >> 48) & 0xff),
-               (byte)((len >> 40) & 0xff),
-               (byte)((len >> 32) & 0xff),
-               (byte)((len >> 24) & 0xff),
-               (byte)((len >> 16) & 0xff),
-               (byte)((len >> 8)  & 0xff),
-               (byte)(len         & 0xff)});
+         mOut.write(b1);
+         mOut.write(new byte[] {(byte)((len >> 56) & 0xff),
+                                (byte)((len >> 48) & 0xff),
+                                (byte)((len >> 40) & 0xff),
+                                (byte)((len >> 32) & 0xff),
+                                (byte)((len >> 24) & 0xff),
+                                (byte)((len >> 16) & 0xff),
+                                (byte)((len >> 8)  & 0xff),
+                                (byte)( len        & 0xff)});
       }
 
       byte mask[] = null;
       if (mOptions.getMaskClientFrames()) {
          // a mask is always needed, even without payload
          mask = newFrameMask();
-         mBuffer.write(mask[0]);
-         mBuffer.write(mask[1]);
-         mBuffer.write(mask[2]);
-         mBuffer.write(mask[3]);
+         mOut.write(mask[0]);
+         mOut.write(mask[1]);
+         mOut.write(mask[2]);
+         mOut.write(mask[3]);
       }
 
       if (len > 0) {
          if (mOptions.getMaskClientFrames()) {
             /// \todo optimize masking
-            /// \todo masking within buffer of output stream
             for (int i = 0; i < len; ++i) {
                payload[i + offset] ^= mask[i % 4];
             }
          }
-         mBuffer.write(payload, offset, length);
+         mOut.write(payload, offset, length);
       }
+      
+      mOut.flush();
    }
 
 
@@ -375,30 +388,17 @@ public class WebSocketWriter extends Handler {
    public void handleMessage(Message msg) {
 
       try {
-
-
-
-         // clear send buffer
-         mBuffer.clear();
-
+         
          // process message from master
          processMessage(msg.obj);
-
-         // send out buffered data
-         mBuffer.flip();
-         if (mBuffer.remaining() > 0) {
-            byte arr[] = new byte[mBuffer.remaining()];
-            mBuffer.getBuffer().get(arr);
-            // this can block on socket write
-            mSocket.getOutputStream().write(arr);
-         }
-
+         
       } catch (SocketException e) {
     	  
     	  if (DEBUG) Log.d(TAG, "run() : SocketException (" + e.toString() + ")");
     	  
     	  // wrap the exception and notify master
     	  notify(new WebSocketMessage.ConnectionLost());
+    	  
       } catch (Exception e) {
 
          if (DEBUG) e.printStackTrace();
@@ -410,7 +410,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Process WebSockets or control message from master. Normally,
+    * Process WebSocket or control message from master. Normally,
     * there should be no reason to override this. If you do, you
     * need to know what you are doing.
     *
@@ -465,7 +465,7 @@ public class WebSocketWriter extends Handler {
 
 
    /**
-    * Process message other than plain WebSockets or control message.
+    * Process message other than plain WebSocket or control message.
     * This is intended to be overridden in derived classes.
     *
     * @param msg      Message from foreground thread to process.
