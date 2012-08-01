@@ -142,7 +142,7 @@ public class WebSocketConnection implements WebSocket {
          try {
             mTransportChannel = createSocket();
             //mOut = mTransportChannel.getOutputStream();
-            mOut = new BufferedOutputStream(mTransportChannel.getOutputStream(), 1024*128);        
+            mOut = new BufferedOutputStream(mTransportChannel.getOutputStream(), 1024*1024*1 + 14);        
 
             return null;
 
